@@ -72,8 +72,14 @@ async function predictWebcam() {
             // Make a prediction through our newly-trained model using the embeddings
             // from mobilenet as input.
             predictions = await model.predict(img);
-            let [background, person] = tf.tidy(() => predictions.resizeNearestNeighbor([512, 512]).split(2, 3));
-            await tf.browser.toPixels(person.squeeze(), predView);
+            tf.tidy(() => {
+                let [background, person] = predictions.resizeNearestNeighbor([512, 512]).split(2, 3);
+                pmin = person.min();
+                pmax = person.max();
+                person = (person - pmin) / (pmax - pmin)
+                person = person.squeeze();
+                tf.browser.toPixels(person, predView);
+            })
         }
         frames += 1;
         await tf.nextFrame();
@@ -86,7 +92,7 @@ async function predictWebcam() {
  */
 async function getImage() {
     const img = await webcam.capture();
-    const processedImg = tf.tidy(() => img.resizeNearestNeighbor(modelInputShape).expandDims(0).toFloat().div(127).sub(1));
+    const processedImg = tf.tidy(() => img.resizeNearestNeighbor(modelInputShape).expandDims(0).toFloat().div(255));
     img.dispose();
     return processedImg;
 }
