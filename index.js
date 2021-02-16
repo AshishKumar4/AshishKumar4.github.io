@@ -76,8 +76,7 @@ async function predictWebcam() {
                 let [background, person] = predictions.resizeNearestNeighbor([512, 512]).split(2, 3);
                 pmin = person.min();
                 pmax = person.max();
-                person = (person - pmin) / (pmax - pmin)
-                person = person.squeeze();
+                person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
                 tf.browser.toPixels(person, predView);
             })
         }
