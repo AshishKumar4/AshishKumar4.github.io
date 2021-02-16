@@ -73,7 +73,7 @@ async function predictWebcam() {
             // from mobilenet as input.
             predictions = await model.predict(img);
             let [background, person] = tf.tidy(() => predictions.resizeNearestNeighbor([512, 512]).split(2, 3));
-            await tf.browser.toPixels(person, predView);
+            await tf.browser.toPixels(person.squeeze(), predView);
         }
         frames += 1;
         await tf.nextFrame();
