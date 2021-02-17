@@ -1,5 +1,6 @@
 const video = document.getElementById('webcam');
 const predView = document.getElementById('prediction');
+const frameDisplay = document.getElementById('frames')
 
 const liveView = document.getElementById('liveView');
 const demosSection = document.getElementById('demos');
@@ -45,7 +46,7 @@ var predictions = undefined;
 var frames = 0;
 
 function timer() {
-    console.log(`Total Frames: ${frames}`);
+    frameDisplay.innerHTML = frames.toString()
     frames = 0;
 }
 
@@ -64,7 +65,7 @@ async function predictWebcam() {
     console.log("Here");
     while (true) {
         // Capture the frame from the webcam.
-        const img = await getImage();
+        const [raw, img] = await getImage();
 
         // Only Render on alternate frames
         if (frames % 2 == 0)
@@ -73,10 +74,10 @@ async function predictWebcam() {
             // from mobilenet as input.
             await tf.tidy(() => {
                 predictions = model.predict(img);
-                let [background, person] = predictions.resizeNearestNeighbor([144, 256]).split(2, 3);
+                let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
                 pmin = person.min();
                 pmax = person.max();
-                person = person.sub(pmin).div(pmax.sub(pmin)).mul(img).resizeNearestNeighbor([512, 512]).squeeze();
+                person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
                 tf.browser.toPixels(person, predView);
             })
         }
@@ -91,9 +92,10 @@ async function predictWebcam() {
  */
 async function getImage() {
     const img = await webcam.capture();
-    const processedImg = tf.tidy(() => img.resizeNearestNeighbor(modelInputShape).expandDims(0).toFloat().div(255));
+    const rawProcessed = tf.tidy(() => img.div(255).expandDims(0).toFloat());
+    const finalProcessed = rawProcessed.resizeNearestNeighbor(modelInputShape)
     img.dispose();
-    return processedImg;
+    return [rawProcessed, finalProcessed];
 }
 
 init();
