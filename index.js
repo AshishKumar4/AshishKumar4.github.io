@@ -60,25 +60,30 @@ async function init() {
 }
 
 var children = [];
+var time = 0;
+var profile = 0;
 
 async function predictWebcam() {
     console.log("Here");
     while (true) {
-        // Capture the frame from the webcam.
-        const [raw, img] = await getImage();
-
         // Only Render on alternate frames
         if (frames % 1 == 0)
         {
-            // Make a prediction through our newly-trained model using the embeddings
-            // from mobilenet as input.
-            await tf.tidy(() => {
-                predictions = model.predict(img);
-                let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
-                pmin = person.min();
-                pmax = person.max();
-                person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
-                tf.browser.toPixels(person, predView);
+            profile = tf.profile(() => {
+                time = await tf.time(() => {
+                    // Capture the frame from the webcam.
+                    const [raw, img] = await getImage();
+                    // Make a prediction through our newly-trained model using the embeddings
+                    // from mobilenet as input.
+                    await tf.tidy(() => {
+                        predictions = model.predict(img);
+                        let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
+                        pmin = person.min();
+                        pmax = person.max();
+                        person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
+                        tf.browser.toPixels(person, predView);
+                    })
+                })
             })
         }
         frames += 1;
