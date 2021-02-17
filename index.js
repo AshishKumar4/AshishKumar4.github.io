@@ -98,7 +98,7 @@ async function predictWebcam() {
 async function getImage() {
     const img = await webcam.capture();
     const rawProcessed = tf.tidy(() => img.div(255).expandDims(0).toFloat());
-    const finalProcessed = rawProcessed.resizeNearestNeighbor(modelInputShape)
+    const finalProcessed = tf.tidy(() => rawProcessed.resizeNearestNeighbor(modelInputShape));
     img.dispose();
     return [rawProcessed, finalProcessed];
 }
