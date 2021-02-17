@@ -58,13 +58,13 @@ var seg_person = undefined;
 async function predictSegmentation(img, raw) {
     // Make a prediction through our newly-trained model using the embeddings
     // from mobilenet as input.
-    tf.tidy(() => {
+    await tf.tidy(() => {
         predictions = model.predict(img);
         let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
         pmin = person.min();
         pmax = person.max();
-        person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
-        tf.browser.toPixels(person, predView);
+        person = person.sub(pmin).div(pmax.sub(pmin)).mul(raw).squeeze();
+        tf.browser.toPixels(person.resizeNearestNeighbor([96, 160]), predView);
 
         background.dispose()
         person.dispose()
@@ -89,7 +89,7 @@ async function predictWebcam() {
 
 function renderFrame() {
     if (seg_person != undefined && seg_person.isDisposed != true) {
-        tf.browser.toPixels(seg_person, predView);
+        // tf.browser.toPixels(seg_person, predView);
         // seg_person.dispose();
     }
 }
