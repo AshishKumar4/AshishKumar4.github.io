@@ -64,9 +64,10 @@ async function predictSegmentation(img, raw) {
         pmin = person.min();
         pmax = person.max();
         person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
+        tf.browser.toPixels(person, predView);
 
         background.dispose()
-        seg_person = person
+        person.dispose()
     })
 }
 
@@ -86,10 +87,10 @@ async function predictWebcam() {
     }
 }
 
-async function renderFrame() {
+function renderFrame() {
     if (seg_person != undefined && seg_person.isDisposed != true) {
         tf.browser.toPixels(seg_person, predView);
-        seg_person.dispose();
+        // seg_person.dispose();
     }
 }
 
@@ -112,7 +113,7 @@ async function init() {
     modelInputShape = [modelInputShape[1], modelInputShape[2]]
     demosSection.classList.remove('invisible');
     setInterval(timer, 1000);
-    setInterval(renderFrame, 30);
+    // setInterval(renderFrame, 30);
 }
 
 tf.setBackend('wasm').then(() => init());
