@@ -114,4 +114,5 @@ async function init() {
     setInterval(timer, 1000);
     setInterval(renderFrame, 30);
 }
-init();
+
+tf.setBackend('wasm').then(() => init());
