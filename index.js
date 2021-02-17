@@ -60,19 +60,19 @@ async function init() {
 }
 
 var children = [];
-var time = 0;
-var profile = 0;
+var tf_time = 0;
+var tf_profile = 0;
 
 async function predictWebcam() {
     console.log("Here");
     while (true) {
+        // Capture the frame from the webcam.
+        const [raw, img] = await getImage();
         // Only Render on alternate frames
         if (frames % 1 == 0)
         {
-            profile = tf.profile(() => {
-                time = await tf.time(() => {
-                    // Capture the frame from the webcam.
-                    const [raw, img] = await getImage();
+            tf_profile = tf.profile(() => {
+                tf_time = await tf.time(() => {
                     // Make a prediction through our newly-trained model using the embeddings
                     // from mobilenet as input.
                     await tf.tidy(() => {
