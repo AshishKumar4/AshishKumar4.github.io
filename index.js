@@ -63,27 +63,31 @@ var children = [];
 var tf_time = 0;
 var tf_profile = 0;
 
+async function renderSegmentation(img, raw) {
+    // Make a prediction through our newly-trained model using the embeddings
+    // from mobilenet as input.
+    tf.tidy(() => {
+        predictions = model.predict(img);
+        let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
+        pmin = person.min();
+        pmax = person.max();
+        person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
+        tf.browser.toPixels(person, predView);
+    })
+}
+
 async function predictWebcam() {
     console.log("Here");
     while (true) {
         // Capture the frame from the webcam.
         const [raw, img] = await getImage();
         // Only Render on alternate frames
-        if (frames % 1 == 0)
-        {
-            tf_profile = tf.profile(() => {
-                tf_time = await tf.time(() => {
-                    // Make a prediction through our newly-trained model using the embeddings
-                    // from mobilenet as input.
-                    await tf.tidy(() => {
-                        predictions = model.predict(img);
-                        let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
-                        pmin = person.min();
-                        pmax = person.max();
-                        person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
-                        tf.browser.toPixels(person, predView);
-                    })
-                })
+        if (frames % 1 == 0) {
+            tf_time = await tf.time(() => {
+                await renderSegmentation(img, raw)
+            })
+
+            tf_profile = await tf.profile(() => {
             })
         }
         frames += 1;
