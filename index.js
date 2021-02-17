@@ -83,12 +83,7 @@ async function predictWebcam() {
         const [raw, img] = await getImage();
         // Only Render on alternate frames
         if (frames % 1 == 0) {
-            tf_time = await tf.time(() => {
-                renderSegmentation(img, raw)
-            })
-
-            tf_profile = await tf.profile(() => {
-            })
+            renderSegmentation(img, raw)
         }
         frames += 1;
         await tf.nextFrame();
