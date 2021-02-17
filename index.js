@@ -50,20 +50,12 @@ function timer() {
     frames = 0;
 }
 
-async function init() {
-    // Store the resulting model in the global scope of our app.
-    model = await tf.loadGraphModel('model.json');
-    modelInputShape = model.inputs[0].shape;
-    modelInputShape = [modelInputShape[1], modelInputShape[2]]
-    demosSection.classList.remove('invisible');
-    setInterval(timer, 1000);
-}
-
 var children = [];
 var tf_time = 0;
 var tf_profile = 0;
+var seg_person = undefined;
 
-async function renderSegmentation(img, raw) {
+async function predictSegmentation(img, raw) {
     // Make a prediction through our newly-trained model using the embeddings
     // from mobilenet as input.
     tf.tidy(() => {
@@ -72,8 +64,10 @@ async function renderSegmentation(img, raw) {
         pmin = person.min();
         pmax = person.max();
         person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
-        tf.browser.toPixels(person, predView);
+
+        background.dispose()
     })
+    return person
 }
 
 async function predictWebcam() {
@@ -83,10 +77,19 @@ async function predictWebcam() {
         const [raw, img] = await getImage();
         // Only Render on alternate frames
         if (frames % 1 == 0) {
-            await renderSegmentation(img, raw)
+            seg_person = await predictSegmentation(img, raw)
         }
+        img.dispose()
+        raw.dispose()
         frames += 1;
         await tf.nextFrame();
+    }
+}
+
+async function renderFrame() {
+    if (seg_person != undefined && seg_person.isDisposed != true) {
+        tf.browser.toPixels(seg_person, predView);
+        seg_person.dispose();
     }
 }
 
@@ -102,4 +105,13 @@ async function getImage() {
     return [rawProcessed, finalProcessed];
 }
 
+async function init() {
+    // Store the resulting model in the global scope of our app.
+    model = await tf.loadGraphModel('model.json');
+    modelInputShape = model.inputs[0].shape;
+    modelInputShape = [modelInputShape[1], modelInputShape[2]]
+    demosSection.classList.remove('invisible');
+    setInterval(timer, 1000);
+    setInterval(renderFrame, 30);
+}
 init();
