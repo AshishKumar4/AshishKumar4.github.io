@@ -66,8 +66,8 @@ async function predictSegmentation(img, raw) {
         person = person.sub(pmin).div(pmax.sub(pmin)).squeeze();
 
         background.dispose()
+        seg_person = person
     })
-    return person
 }
 
 async function predictWebcam() {
@@ -77,7 +77,7 @@ async function predictWebcam() {
         const [raw, img] = await getImage();
         // Only Render on alternate frames
         if (frames % 1 == 0) {
-            seg_person = await predictSegmentation(img, raw)
+            await predictSegmentation(img, raw)
         }
         img.dispose()
         raw.dispose()
