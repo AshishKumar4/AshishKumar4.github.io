@@ -68,7 +68,7 @@ async function predictWebcam() {
         const [raw, img] = await getImage();
 
         // Only Render on alternate frames
-        if (frames % 2 == 0)
+        if (frames % 1 == 0)
         {
             // Make a prediction through our newly-trained model using the embeddings
             // from mobilenet as input.
