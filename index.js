@@ -96,11 +96,11 @@ async function predictSegmentation(img, raw) {
     // Make a prediction through our newly-trained model using the embeddings
     // from mobilenet as input.
     await tf.tidy(() => {
-        predictions = model.predict(img).squeeze()//.softmax();
+        predictions = model.predict(img).squeeze().softmax();
         let [background, person] = predictions.resizeBilinear([480, 640]).split(2, 2);
-        pmin = person.min();
-        pmax = person.max();
-        person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
+        // pmin = person.min();
+        // pmax = person.max();
+        // person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
         final = person.mul(raw.squeeze());
         if (backgroundImage != undefined)
         {
