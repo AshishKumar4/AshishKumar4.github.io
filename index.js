@@ -11,21 +11,30 @@ const bg_ctx = bgCanvas.getContext("2d");
 
 var backgroundImage = undefined;
 
+var model = undefined;
+var modelInputShape = undefined;
+var webcam = undefined;
+var predictions = undefined;
+var frames = 0;
+
 function readImage() {
-  if (!this.files || !this.files[0]) return;
-  
-  const FR = new FileReader();
-  FR.addEventListener("load", (evt) => {
-    const img = new Image();
-    img.style.objectFit = "fill";
-    img.addEventListener("load", () => {
-        bg_ctx.clearRect(0, 0, bg_ctx.canvas.width, bg_ctx.canvas.height);
-        bg_ctx.drawImage(img, 0, 0);
-        backgroundImage = tf.tidy(() => tf.browser.fromPixels(bgCanvas).asType('float32').div(255));
+    if (!this.files || !this.files[0]) return;
+
+    const FR = new FileReader();
+    FR.addEventListener("load", (evt) => {
+        const img = new Image();
+        img.style.objectFit = "fill";
+        img.addEventListener("load", () => {
+            bg_ctx.clearRect(0, 0, bg_ctx.canvas.width, bg_ctx.canvas.height);
+            bg_ctx.drawImage(img, 0, 0);
+            backgroundImage = tf.tidy(() => tf.browser.fromPixels(bgCanvas).asType('float32').div(255));
+            // const ctx = predView.getContext('2d')
+            // ctx.drawImage(bgCanvas, 0, 0)
+            // ctx.save()
+        });
+        img.src = evt.target.result;
     });
-    img.src = evt.target.result;
-  });
-  FR.readAsDataURL(this.files[0]);
+    FR.readAsDataURL(this.files[0]);
 }
 
 document.getElementById('bgUpload').addEventListener("change", readImage);
@@ -43,24 +52,6 @@ if (getUserMediaSupported()) {
     enableWebcamButton.addEventListener('click', enableCam);
 } else {
     console.warn('getUserMedia() is not supported by your browser');
-}
-
-async function toPixels(tensor, canvas=null){
-    const [height, width] = tensor.shape.slice(0, 2);
-    // convert to rgba by adding alpha channel
-    const alpha = tf.fill([height, width, 1], 255, 'int32');
-    const rgba = tf.concat([tensor, alpha], 2);
-    tf.dispose([alpha, tensor]);
-    
-    const bytes = await rgba.data();
-    const pixelData = new Uint8ClampedArray(bytes);
-    if (canvas !== null){
-        const imageData = new ImageData(pixelData, width, height);
-        const ctx = canvas.getContext('2d');
-        ctx.putImageData(imageData, 0, 0);
-    }
-    tf.dispose(rgba);
-    return bytes;
 }
 
 // Enable the live webcam view and start classification.
@@ -81,15 +72,39 @@ async function enableCam(event) {
     webcam = await tf.data.webcam(video);
 }
 
-var model = undefined;
-var modelInputShape = undefined;
-var webcam = undefined;
-var predictions = undefined;
-var frames = 0;
-
 function timer() {
     frameDisplay.innerHTML = frames.toString()
     frames = 0;
+}
+
+async function toPixels(tensor, canvas = null, mask = undefined) {
+    const [height, width] = tensor.shape.slice(0, 2);
+    // convert to rgba by adding alpha channel
+    // let alpha = undefined;
+    // if (mask != undefined)
+    // {
+    //     alpha = mask.mul(255).asType('int32')
+    // }
+    // else 
+    // {
+    const alpha = tf.fill([height, width, 1], 0, 'int32');
+    // }
+    const rgba = tf.concat([tensor, alpha], 2);
+    tf.dispose([alpha, tensor]);
+
+    const bytes = await rgba.data();
+    const pixelData = new Uint8ClampedArray(bytes);
+    if (canvas !== null) {
+        const imageData = new ImageData(pixelData, width, height);
+        const ctx = canvas.getContext('2d');
+        // ctx.restore()
+        // ctx.putImageData(imageData, 0, 0);
+        await createImageBitmap(imageData).then(function (imgBitmap) {
+            ctx.drawImage(imgBitmap, 0, 0);
+        });
+    }
+    tf.dispose(rgba);
+    return bytes;
 }
 
 async function predictSegmentation(img, raw) {
@@ -102,13 +117,12 @@ async function predictSegmentation(img, raw) {
         // pmax = person.max();
         // person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
         final = person.mul(raw.squeeze());
-        if (backgroundImage != undefined)
-        {
+        if (backgroundImage != undefined) {
             final = final.add(person.sub(1).abs().mul(backgroundImage));
         }
         if (frames % 2 == 0) {
             // person = person.resizeNearestNeighbor([96, 160]);
-            toPixels(final.mul(255).asType('int32'), predView);
+            toPixels(raw.squeeze().mul(255).asType('int32'), predView);
         }
 
         background.dispose()
