@@ -17,7 +17,7 @@ function readImage() {
   const FR = new FileReader();
   FR.addEventListener("load", (evt) => {
     const img = new Image();
-    img.style.objectFit = "contain";
+    img.style.objectFit = "fill";
     img.addEventListener("load", () => {
         bg_ctx.clearRect(0, 0, bg_ctx.canvas.width, bg_ctx.canvas.height);
         bg_ctx.drawImage(img, 0, 0);

@@ -14,7 +14,13 @@
       <div class="columns">
         <div class="column">
           <div class="container box">
-            <div id="liveView" class="camView">
+            <div>
+              <h1>Frame monitor:</h1>
+              <div id="frames">
+      
+              </div>
+            </div>
+            <div id="liveView" class="box">
               <button id="webcamButton">Enable Webcam</button>
               <video id="webcam" autoplay width="640" height="480"></video>
               <canvas id="prediction" width="640" height="480"></canvas>
@@ -28,13 +34,6 @@
             <input type="file" id="bgUpload"/>
             <canvas id="bgCanvas" width="640" height="480"></canvas>
           </div>
-        </div>
-      </div>
-
-      <div>
-        <h1>Frame monitor:</h1>
-        <div id="frames">
-
         </div>
       </div>
 
