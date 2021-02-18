@@ -81,7 +81,7 @@ async function predictSegmentation(img, raw) {
         let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
         pmin = person.min();
         pmax = person.max();
-        person = person.sub(pmin).div(pmax.sub(pmin))
+        person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
         person = person.mul(raw).squeeze();
         if (frames % 2 == 0) {
             // person = person.resizeNearestNeighbor([96, 160]);
