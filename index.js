@@ -87,7 +87,7 @@ async function toPixels(tensor, canvas = null, mask = undefined) {
     // }
     // else 
     // {
-    const alpha = tf.fill([height, width, 1], 0, 'int32');
+    const alpha = tf.fill([height, width, 1], 255, 'int32');
     // }
     const rgba = tf.concat([tensor, alpha], 2);
     tf.dispose([alpha, tensor]);
@@ -98,10 +98,10 @@ async function toPixels(tensor, canvas = null, mask = undefined) {
         const imageData = new ImageData(pixelData, width, height);
         const ctx = canvas.getContext('2d');
         // ctx.restore()
-        // ctx.putImageData(imageData, 0, 0);
-        await createImageBitmap(imageData).then(function (imgBitmap) {
-            ctx.drawImage(imgBitmap, 0, 0);
-        });
+        ctx.putImageData(imageData, 0, 0);
+        // await createImageBitmap(imageData).then(function (imgBitmap) {
+        //     ctx.drawImage(imgBitmap, 0, 0);
+        // });
     }
     tf.dispose(rgba);
     return bytes;
