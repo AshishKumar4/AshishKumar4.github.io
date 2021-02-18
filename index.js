@@ -63,8 +63,11 @@ async function predictSegmentation(img, raw) {
         let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
         pmin = person.min();
         pmax = person.max();
-        person = person.sub(pmin).div(pmax.sub(pmin)).mul(raw).squeeze();
-        tf.browser.toPixels(person.resizeNearestNeighbor([96, 160]), predView);
+        person = person.sub(pmin).div(pmax.sub(pmin)).tanh().mul(raw).squeeze();
+        if (frames % 2 == 0) {
+            // person = person.resizeNearestNeighbor([96, 160]);
+            tf.browser.toPixels(person, predView);
+        }
 
         background.dispose()
         person.dispose()
@@ -77,9 +80,7 @@ async function predictWebcam() {
         // Capture the frame from the webcam.
         const [raw, img] = await getImage();
         // Only Render on alternate frames
-        if (frames % 1 == 0) {
-            await predictSegmentation(img, raw)
-        }
+        await predictSegmentation(img, raw)
         img.dispose()
         raw.dispose()
         frames += 1;
