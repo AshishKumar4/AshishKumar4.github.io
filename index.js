@@ -21,6 +21,24 @@ if (getUserMediaSupported()) {
     console.warn('getUserMedia() is not supported by your browser');
 }
 
+async function toPixels(tensor, canvas=null){
+    const [height, width] = tensor.shape.slice(0, 2);
+    // convert to rgba by adding alpha channel
+    const alpha = tf.fill([height, width, 1], 255, 'int32');
+    const rgba = tf.concat([tensor, alpha], 2);
+    tf.dispose([alpha, tensor]);
+    
+    const bytes = await rgba.data();
+    const pixelData = new Uint8ClampedArray(bytes);
+    if (canvas !== null){
+        const imageData = new ImageData(pixelData, width, height);
+        const ctx = canvas.getContext('2d');
+        ctx.putImageData(imageData, 0, 0);
+    }
+    tf.dispose(rgba);
+    return bytes;
+}
+
 // Enable the live webcam view and start classification.
 async function enableCam(event) {
     // // Hide the button once clicked.
@@ -63,10 +81,11 @@ async function predictSegmentation(img, raw) {
         let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
         pmin = person.min();
         pmax = person.max();
-        person = person.sub(pmin).div(pmax.sub(pmin)).tanh().mul(raw).squeeze();
+        person = person.sub(pmin).div(pmax.sub(pmin))
+        person = person.mul(raw).squeeze();
         if (frames % 2 == 0) {
             // person = person.resizeNearestNeighbor([96, 160]);
-            tf.browser.toPixels(person, predView);
+            toPixels(person.mul(255).asType('int32'), predView);
         }
 
         background.dispose()
