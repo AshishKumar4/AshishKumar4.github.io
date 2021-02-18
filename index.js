@@ -20,7 +20,7 @@ function readImage() {
     img.addEventListener("load", () => {
         bg_ctx.clearRect(0, 0, bg_ctx.canvas.width, bg_ctx.canvas.height);
         bg_ctx.drawImage(img, 0, 0);
-        backgroundImage = tf.browser.fromPixels(bgCanvas)
+        backgroundImage = tf.tidy(() => tf.browser.fromPixels(bgCanvas).asType('float32').div(255));
     });
     img.src = evt.target.result;
   });
@@ -95,19 +95,19 @@ async function predictSegmentation(img, raw) {
     // Make a prediction through our newly-trained model using the embeddings
     // from mobilenet as input.
     await tf.tidy(() => {
-        predictions = model.predict(img).squeeze().softmax();
+        predictions = model.predict(img).squeeze()//.softmax();
         let [background, person] = predictions.resizeBilinear([480, 640]).split(2, 2);
-        // pmin = person.min();
-        // pmax = person.max();
-        // person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
-        person = person.mul(raw.squeeze());
+        pmin = person.min();
+        pmax = person.max();
+        person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
+        final = person.mul(raw.squeeze());
         if (backgroundImage != undefined)
         {
-            person = person.add(backgroundImage);
+            final = final.add(person.sub(1).abs().mul(backgroundImage));
         }
         if (frames % 2 == 0) {
             // person = person.resizeNearestNeighbor([96, 160]);
-            toPixels(person.mul(255).asType('int32'), predView);
+            toPixels(final.mul(255).asType('int32'), predView);
         }
 
         background.dispose()
