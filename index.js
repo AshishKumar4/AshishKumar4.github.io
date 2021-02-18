@@ -121,12 +121,13 @@ async function predictSegmentation(img, raw) {
             final = final.add(person.sub(1).abs().mul(backgroundImage));
         }
         if (frames % 2 == 0) {
-            // person = person.resizeNearestNeighbor([96, 160]);
-            toPixels(final.squeeze().mul(255).asType('int32'), predView);
+            // final = final.resizeNearestNeighbor([96, 160]);
+            toPixels(final.mul(255).asType('int32'), predView);
         }
 
         background.dispose()
         person.dispose()
+        final.dispose()
     })
 }
 
