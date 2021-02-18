@@ -7,9 +7,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- Import the webpage's stylesheet -->
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.1/css/bulma.min.css">
   </head>  
   <body>
     <section id="demos" class="invisible">
+      <div class="columns">
+        <div class="column">
+          <div class="container box">
+            <div id="liveView" class="camView">
+              <button id="webcamButton">Enable Webcam</button>
+              <video id="webcam" autoplay width="640" height="480"></video>
+              <canvas id="prediction" width="640" height="480"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="column">
+          <div class="container box">
+            <h1>Background Upload and preview: </h1>
+            <input type="file" id="bgUpload"/>
+            <canvas id="bgCanvas" width="640" height="480"></canvas>
+          </div>
+        </div>
+      </div>
 
       <div>
         <h1>Frame monitor:</h1>
@@ -18,14 +38,6 @@
         </div>
       </div>
 
-      <div id="liveView" class="camView">
-        <button id="webcamButton">Enable Webcam</button>
-        <video id="webcam" autoplay width="640" height="480"></video>
-        <canvas id="prediction" width="640" height="480"></canvas>
-        <h1>Backgroun Upload and preview: </h1>
-        <input type="file" id="bgUpload"/>
-        <canvas id="bgCanvas" width="640" height="480"></canvas>
-      </div>
     </section>
 
     <!-- Import TensorFlow.js library -->
