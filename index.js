@@ -6,6 +6,29 @@ const liveView = document.getElementById('liveView');
 const demosSection = document.getElementById('demos');
 const enableWebcamButton = document.getElementById('webcamButton');
 
+const bgCanvas = document.getElementById('bgCanvas');
+const bg_ctx = bgCanvas.getContext("2d");
+
+var backgroundImage = undefined;
+
+function readImage() {
+  if (!this.files || !this.files[0]) return;
+  
+  const FR = new FileReader();
+  FR.addEventListener("load", (evt) => {
+    const img = new Image();
+    img.addEventListener("load", () => {
+        bg_ctx.clearRect(0, 0, bg_ctx.canvas.width, bg_ctx.canvas.height);
+        bg_ctx.drawImage(img, 0, 0);
+        backgroundImage = tf.browser.fromPixels(bgCanvas)
+    });
+    img.src = evt.target.result;
+  });
+  FR.readAsDataURL(this.files[0]);
+}
+
+document.getElementById('bgUpload').addEventListener("change", readImage);
+
 // Check if webcam access is supported.
 function getUserMediaSupported() {
     return !!(navigator.mediaDevices &&
@@ -78,6 +101,10 @@ async function predictSegmentation(img, raw) {
         // pmax = person.max();
         // person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
         person = person.mul(raw.squeeze());
+        if (backgroundImage != undefined)
+        {
+            person = person.add(backgroundImage);
+        }
         if (frames % 2 == 0) {
             // person = person.resizeNearestNeighbor([96, 160]);
             toPixels(person.mul(255).asType('int32'), predView);
