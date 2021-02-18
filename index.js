@@ -68,21 +68,16 @@ function timer() {
     frames = 0;
 }
 
-var children = [];
-var tf_time = 0;
-var tf_profile = 0;
-var seg_person = undefined;
-
 async function predictSegmentation(img, raw) {
     // Make a prediction through our newly-trained model using the embeddings
     // from mobilenet as input.
     await tf.tidy(() => {
-        predictions = model.predict(img);
-        let [background, person] = predictions.resizeNearestNeighbor([480, 640]).split(2, 3);
-        pmin = person.min();
-        pmax = person.max();
-        person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
-        person = person.mul(raw).squeeze();
+        predictions = model.predict(img).squeeze().softmax();
+        let [background, person] = predictions.resizeBilinear([480, 640]).split(2, 2);
+        // pmin = person.min();
+        // pmax = person.max();
+        // person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
+        person = person.mul(raw.squeeze());
         if (frames % 2 == 0) {
             // person = person.resizeNearestNeighbor([96, 160]);
             toPixels(person.mul(255).asType('int32'), predView);
@@ -107,13 +102,6 @@ async function predictWebcam() {
     }
 }
 
-function renderFrame() {
-    if (seg_person != undefined && seg_person.isDisposed != true) {
-        // tf.browser.toPixels(seg_person, predView);
-        // seg_person.dispose();
-    }
-}
-
 /**
  * Captures a frame from the webcam and normalizes it between -1 and 1.
  * Returns a batched image (1-element batch) of shape [1, w, h, c].
@@ -121,7 +109,7 @@ function renderFrame() {
 async function getImage() {
     const img = await webcam.capture();
     const rawProcessed = tf.tidy(() => img.div(255).expandDims(0).toFloat());
-    const finalProcessed = tf.tidy(() => rawProcessed.resizeNearestNeighbor(modelInputShape));
+    const finalProcessed = tf.tidy(() => rawProcessed.resizeBilinear(modelInputShape));
     img.dispose();
     return [rawProcessed, finalProcessed];
 }
@@ -133,7 +121,7 @@ async function init() {
     modelInputShape = [modelInputShape[1], modelInputShape[2]]
     demosSection.classList.remove('invisible');
     setInterval(timer, 1000);
-    // setInterval(renderFrame, 30);
 }
 
 tf.setBackend('webgl').then(() => init());
+// tf.setBackend('wasm').then(() => init());
