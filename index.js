@@ -77,7 +77,7 @@ function timer() {
     frames = 0;
 }
 
-async function toPixels(tensor, canvas = null, mask = undefined) {
+async function toPixels(tensor, canvas = null) {
     const [height, width] = tensor.shape.slice(0, 2);
     // convert to rgba by adding alpha channel
     // let alpha = undefined;
@@ -122,7 +122,7 @@ async function predictSegmentation(img, raw) {
         }
         if (frames % 2 == 0) {
             // person = person.resizeNearestNeighbor([96, 160]);
-            toPixels(raw.squeeze().mul(255).asType('int32'), predView);
+            toPixels(final.squeeze().mul(255).asType('int32'), predView);
         }
 
         background.dispose()
