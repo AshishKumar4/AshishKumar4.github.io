@@ -9,6 +9,8 @@ const enableWebcamButton = document.getElementById('webcamButton');
 const bgCanvas = document.getElementById('bgCanvas');
 const bg_ctx = bgCanvas.getContext("2d");
 
+var inferenceSession = undefined;
+
 var backgroundImage = undefined;
 
 var model = undefined;
@@ -79,16 +81,7 @@ function timer() {
 
 async function toPixels(tensor, canvas = null) {
     const [height, width] = tensor.shape.slice(0, 2);
-    // convert to rgba by adding alpha channel
-    // let alpha = undefined;
-    // if (mask != undefined)
-    // {
-    //     alpha = mask.mul(255).asType('int32')
-    // }
-    // else 
-    // {
     const alpha = tf.fill([height, width, 1], 255, 'int32');
-    // }
     const rgba = tf.concat([tensor, alpha], 2);
     tf.dispose([alpha, tensor]);
 
@@ -97,11 +90,7 @@ async function toPixels(tensor, canvas = null) {
     if (canvas !== null) {
         const imageData = new ImageData(pixelData, width, height);
         const ctx = canvas.getContext('2d');
-        // ctx.restore()
         ctx.putImageData(imageData, 0, 0);
-        // await createImageBitmap(imageData).then(function (imgBitmap) {
-        //     ctx.drawImage(imgBitmap, 0, 0);
-        // });
     }
     tf.dispose(rgba);
     return bytes;
@@ -127,16 +116,12 @@ async function predictSegmentation(img, raw) {
     await tf.tidy(() => {
         predictions = model.predict(img).squeeze().softmax();
         let [background, person] = predictions.resizeBilinear([480, 640]).split(2, 2);
-        // pmin = person.min();
-        // pmax = person.max();
-        // person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
-        // person = tf.conv2d(person, smoothFilter3, 1, 'same')
+        person = tf.conv2d(person, smoothFilter3, 1, 'same')
         final = person.mul(raw.squeeze());
         if (backgroundImage != undefined) {
             final = final.add(person.sub(1).abs().mul(backgroundImage));
         }
         if (frames % 2 == 0) {
-            // final = final.resizeNearestNeighbor([96, 160]);
             toPixels(final.mul(255).asType('int32'), predView);
         }
 
@@ -174,6 +159,7 @@ async function getImage() {
 
 async function init() {
     // Store the resulting model in the global scope of our app.
+    inferenceSession = new onnx.InferenceSession({ backendHint: "webgl2" });
     model = await tf.loadGraphModel('model.json');
     modelInputShape = model.inputs[0].shape;
     modelInputShape = [modelInputShape[1], modelInputShape[2]]
