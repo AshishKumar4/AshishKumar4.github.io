@@ -181,7 +181,7 @@ async function init() {
     setInterval(timer, 1000);
 }
 
-init();
+tf.ready().then(()=>init());
 
 // tf.setBackend('webgl').then(() => init());
 // tf.setBackend('wasm').then(() => init());
