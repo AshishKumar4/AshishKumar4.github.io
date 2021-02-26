@@ -1,6 +1,6 @@
 const video = document.getElementById('webcam');
 const predView = document.getElementById('prediction');
-const frameDisplay = document.getElementById('frames')
+const frameDisplay = document.getElementById('frames');
 
 const liveView = document.getElementById('liveView');
 const demosSection = document.getElementById('demos');
@@ -9,10 +9,25 @@ const enableWebcamButton = document.getElementById('webcamButton');
 const bgCanvas = document.getElementById('bgCanvas');
 const bg_ctx = bgCanvas.getContext("2d");
 
+const smoothFilter5 = tf.tensor4d([
+    [[[1]], [[1]], [[1]], [[1]], [[1]]],
+    [[[1]], [[1]], [[1]], [[1]], [[1]]],
+    [[[1]], [[1]], [[1]], [[1]], [[1]]],
+    [[[1]], [[1]], [[1]], [[1]], [[1]]],
+    [[[1]], [[1]], [[1]], [[1]], [[1]]],
+]).div(25);
+
+const smoothFilter3 = tf.tensor4d([
+    [[[1]], [[1]], [[1]]],
+    [[[1]], [[1]], [[1]]],
+    [[[1]], [[1]], [[1]]],
+]).div(9);
+
 var backgroundImage = undefined;
 
 var model = undefined;
 var modelInputShape = undefined;
+var streamShape = undefined;
 var webcam = undefined;
 var predictions = undefined;
 var frames = 0;
@@ -25,9 +40,10 @@ function readImage() {
         const img = new Image();
         img.style.objectFit = "fill";
         img.addEventListener("load", () => {
-            bg_ctx.clearRect(0, 0, bg_ctx.canvas.width, bg_ctx.canvas.height);
-            bg_ctx.drawImage(img, 0, 0);
-            backgroundImage = tf.tidy(() => tf.browser.fromPixels(bgCanvas).asType('float32').div(255));
+            backgroundImage = img;
+            // bg_ctx.clearRect(0, 0, bg_ctx.canvas.width, bg_ctx.canvas.height);
+            // bg_ctx.drawImage(img, 0, 0);
+            // backgroundImage = tf.tidy(() => tf.browser.fromPixels(bgCanvas).asType('float32').div(255));
             // const ctx = predView.getContext('2d')
             // ctx.drawImage(bgCanvas, 0, 0)
             // ctx.save()
@@ -67,13 +83,15 @@ async function enableCam(event) {
     // // Activate the webcam stream.
     navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
         // video.srcObject = stream;
+		const { height, width } = stream.getVideoTracks()[0].getSettings();
+		streamShape = [height, width];
         video.addEventListener('loadeddata', predictWebcam);
     });
     webcam = await tf.data.webcam(video);
 }
 
 function timer() {
-    frameDisplay.innerHTML = frames.toString()
+    frameDisplay.innerHTML = frames.toString();
     frames = 0;
 }
 
@@ -107,54 +125,54 @@ async function toPixels(tensor, canvas = null) {
     return bytes;
 }
 
-const smoothFilter5 = tf.tensor4d([
-    [[[1]], [[1]], [[1]], [[1]], [[1]]],
-    [[[1]], [[1]], [[1]], [[1]], [[1]]],
-    [[[1]], [[1]], [[1]], [[1]], [[1]]],
-    [[[1]], [[1]], [[1]], [[1]], [[1]]],
-    [[[1]], [[1]], [[1]], [[1]], [[1]]],
-]).div(25)
+async function predictSegmentation(img) {
+    const [height, width] = streamShape;
+    const [modelHeight, modelWidth] = modelInputShape;
 
-const smoothFilter3 = tf.tensor4d([
-    [[[1]], [[1]], [[1]]],
-    [[[1]], [[1]], [[1]]],
-    [[[1]], [[1]], [[1]]],
-]).div(9)
+    const imageData = new ImageData(modelWidth, modelHeight);
+    // let imageData;
 
-async function predictSegmentation(img, raw) {
-    // Make a prediction through our newly-trained model using the embeddings
-    // from mobilenet as input.
-    await tf.tidy(() => {
-        predictions = model.predict(img).squeeze().softmax();
-        let [background, person] = predictions.resizeBilinear([480, 640]).split(2, 2);
-        // pmin = person.min();
-        // pmax = person.max();
-        // person = person.sub(pmin).div(pmax.sub(pmin)).sub(0.5).ceil()
-        // person = tf.conv2d(person, smoothFilter3, 1, 'same')
-        final = person.mul(raw.squeeze());
-        if (backgroundImage != undefined) {
-            final = final.add(person.sub(1).abs().mul(backgroundImage));
+    tf.tidy(() => {
+        const predictions = model.predict(img).squeeze().softmax().log().add(1).clipByValue(0, 1); // .resizeBilinear(streamShape); // .softmax().log().add(1).clipByValue(0, 1)
+        const [background, person] = predictions.split(2, 2);
+        const segmentationMask = background;
+
+        const segData = segmentationMask.dataSync();
+        for (let i = 0; i < modelHeight * modelWidth; i += 1) {
+            imageData.data[i * 4 + 3] = segData[i] * 255;
         }
-        if (frames % 2 == 0) {
-            // final = final.resizeNearestNeighbor([96, 160]);
-            toPixels(final.mul(255).asType('int32'), predView);
-        }
+        segmentationMask.dispose();
+        background.dispose();
+        person.dispose();
+    });
 
-        background.dispose()
-        person.dispose()
-        final.dispose()
-    })
+    const imageBitmap = await createImageBitmap(imageData);
+    predViewCtx = predView.getContext('2d');
+    predViewCtx.globalCompositeOperation = 'copy';
+    predViewCtx.filter = 'blur(2px)';
+    predViewCtx.drawImage(imageBitmap, 0, 0, modelWidth, modelHeight, 0, 0, width, height);
+    predViewCtx.globalCompositeOperation = 'source-out';
+    predViewCtx.filter = 'none';
+    predViewCtx.drawImage(video, 0, 0);
+
+    if (backgroundImage !== undefined && backgroundImage !== null) {
+        predViewCtx.filter = 'none';
+        predViewCtx.globalCompositeOperation = 'destination-over';
+        predViewCtx.drawImage(backgroundImage, 0, 0,
+            backgroundImage.width, backgroundImage.height,
+            0, 0, width, height);
+    }
 }
 
 async function predictWebcam() {
     console.log("Here");
     while (true) {
         // Capture the frame from the webcam.
-        const [raw, img] = await getImage();
+        const img = await getImage();
         // Only Render on alternate frames
-        await predictSegmentation(img, raw)
+        await predictSegmentation(img)
         img.dispose()
-        raw.dispose()
+        // raw.dispose()
         frames += 1;
         await tf.nextFrame();
     }
@@ -165,11 +183,13 @@ async function predictWebcam() {
  * Returns a batched image (1-element batch) of shape [1, w, h, c].
  */
 async function getImage() {
-    const img = await webcam.capture();
-    const rawProcessed = tf.tidy(() => img.div(255).expandDims(0).toFloat());
-    const finalProcessed = tf.tidy(() => rawProcessed.resizeBilinear(modelInputShape));
-    img.dispose();
-    return [rawProcessed, finalProcessed];
+    // console.log(video, modelInputShape);
+    const img = tf.tidy(() => tf.browser.fromPixels(video).resizeBilinear(modelInputShape).expandDims(0).toFloat().div(255));
+
+    // scaleDownCanvasCtx.drawImage(originalVideoElement, 0, 0, width, height, 0, 0, modelWidth, modelHeight);
+    // const img = tf.tidy(() => tf.browser.fromPixels(scaleDownCanvas).expandDims(0).toFloat().div(255));
+
+    return img;
 }
 
 async function init() {
@@ -181,7 +201,7 @@ async function init() {
     setInterval(timer, 1000);
 }
 
-tf.ready().then(()=>init());
+tf.ready().then(() => init());
 
 // tf.setBackend('webgl').then(() => init());
 // tf.setBackend('wasm').then(() => init());
