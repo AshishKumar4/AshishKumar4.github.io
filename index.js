@@ -194,7 +194,7 @@ async function getImage() {
 
 async function init() {
     // Store the resulting model in the global scope of our app.
-    model = await tf.loadGraphModel('model.json');
+    model = await tf.loadGraphModel('model_f16/model.json');
     modelInputShape = model.inputs[0].shape;
     modelInputShape = [modelInputShape[1], modelInputShape[2]]
     demosSection.classList.remove('invisible');
