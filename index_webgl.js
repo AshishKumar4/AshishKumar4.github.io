@@ -1,5 +1,7 @@
 const video = document.getElementById('webcam');
 const predView = document.getElementById('prediction');
+const predViewCtx = predView.getContext('2d');
+
 const frameDisplay = document.getElementById('frames');
 
 const liveView = document.getElementById('liveView');
@@ -10,6 +12,7 @@ const bgCanvas = document.getElementById('bgCanvas');
 const bg_ctx = bgCanvas.getContext("2d");
 
 const webglCanvas =  document.getElementById('webgl');
+// const webglCanvas = new OffscreenCanvas(width=640, height=480);
 const webglCanvasCtx = webglCanvas.getContext("webgl2");
 
 const smoothFilter5 = tf.tensor4d([
@@ -49,6 +52,24 @@ function readImage() {
             backgroundImage = img;
             // renderWebgl(img);
             bg_ctx.drawImage(img, 0, 0);
+            const [height, width] = streamShape;
+            predViewCtx.drawImage(backgroundImage, 0, 0,
+                backgroundImage.width, backgroundImage.height,
+                0, 0, width, height);
+
+            // Upload the image into the texture.
+            var mipLevel = 0;               // the largest mip
+            var internalFormat = webglCanvasCtx.RGBA;   // format we want in the texture
+            var srcFormat = webglCanvasCtx.RGBA;        // format of data we are supplying
+            var srcType = webglCanvasCtx.UNSIGNED_BYTE; // type of data we are supplying
+            // webglCanvasCtx.activeTexture(webglCanvasCtx.TEXTURE2);
+            webglCanvasCtx.bindTexture(webglCanvasCtx.TEXTURE_2D, webglBackgroundTexture);
+            webglCanvasCtx.texImage2D(webglCanvasCtx.TEXTURE_2D,
+                            mipLevel,
+                            internalFormat,
+                            srcFormat,
+                            srcType,
+                            backgroundImage);
         });
         img.src = evt.target.result;
     });
@@ -89,7 +110,10 @@ async function enableCam(event) {
 		streamShape = [height, width];
         video.addEventListener('loadeddata', predictWebcam);
     });
-    webcam = await tf.data.webcam(video);
+    tf.data.webcam(video).then((obj) => {
+        webcam = obj;
+        setInterval(predictWebcam, 16);
+    });
 }
 
 function timer() {
@@ -97,51 +121,83 @@ function timer() {
     frames = 0;
 }
 
+// async function predictSegmentation(img) {
+//     const [height, width] = streamShape;
+//     const [modelHeight, modelWidth] = modelInputShape;
+
+//     // const imageData = new ImageData(modelWidth, modelHeight);
+//     // const tfCanvas = tf.backend().canvas;
+//     // const tfCanvasCtx = tfCanvas.getContext('webgl2');
+//     // const tfCanvasCtx = webglCanvasCtx;
+
+//     tf.tidy(() => {
+//         const predictions = model.predict(img).squeeze().softmax(); // .resizeBilinear(streamShape); // .softmax().log().add(1).clipByValue(0, 1)
+//         const [background, person] = predictions.split(2, 2);
+//         const segmentationMask = background.mul(255);
+
+//         const segData = segmentationMask.dataSync();
+
+//         const imageData = new Uint8ClampedArray(segData);
+
+//         if (backgroundImage !== undefined && backgroundImage !== null) {
+//             renderWithBackgroundWebgl(imageData, video, predView);
+//         } else {
+//             renderWithBackgroundWebgl(imageData, video, null);
+//         }
+
+//         segmentationMask.dispose();
+//         background.dispose();
+//         person.dispose();
+//     });
+// }
+
 async function predictSegmentation(img) {
     const [height, width] = streamShape;
     const [modelHeight, modelWidth] = modelInputShape;
 
     // const imageData = new ImageData(modelWidth, modelHeight);
+    // const tfCanvas = tf.backend().canvas;
+    // const tfCanvasCtx = tfCanvas.getContext('webgl2');
+    // const tfCanvasCtx = webglCanvasCtx;
+    
+    const segmentationMask = await tf.tidy(() => model.predict(img).squeeze().softmax().split(2, 2)[0].mul(255));
 
-    tf.tidy(() => {
-        const predictions = model.predict(img).squeeze().softmax(); // .resizeBilinear(streamShape); // .softmax().log().add(1).clipByValue(0, 1)
-        const [background, person] = predictions.split(2, 2);
-        const segmentationMask = background;
+    const segData = await segmentationMask.data();
 
-        const segData = segmentationMask.mul(255).dataSync();
+    const imageData = new Uint8ClampedArray(segData);
 
-        const imageData = new Uint8ClampedArray(segData);
+    if (backgroundImage !== undefined && backgroundImage !== null) {
+        renderWithBackgroundWebgl(imageData, video, predView);
+    } else {
+        renderWithBackgroundWebgl(imageData, video, null);
+    }
 
-        predViewCtx = predView.getContext('2d');
-        predViewCtx.d
-
-        if (backgroundImage !== undefined && backgroundImage !== null) {
-            predViewCtx.drawImage(backgroundImage, 0, 0,
-                backgroundImage.width, backgroundImage.height,
-                0, 0, width, height);
-            renderWithBackgroundWebgl(imageData, video, predView);
-        } else {
-            renderWithBackgroundWebgl(imageData, video, null);
-        }
-
-        segmentationMask.dispose();
-        background.dispose();
-        person.dispose();
-    });
+    segmentationMask.dispose();
 }
 
+// async function predictWebcam() {
+//     // console.log("Here");
+//     while (true) {
+//         // Capture the frame from the webcam.
+//         const img = await getImage();
+//         // Only Render on alternate frames
+//         await predictSegmentation(img);
+//         img.dispose();
+//         // raw.dispose()
+//         frames += 1;
+//         // await tf.nextFrame();
+//     }
+// }
+
 async function predictWebcam() {
-    console.log("Here");
-    while (true) {
-        // Capture the frame from the webcam.
-        const img = await getImage();
-        // Only Render on alternate frames
-        await predictSegmentation(img);
-        img.dispose();
-        // raw.dispose()
-        frames += 1;
-        await tf.nextFrame();
-    }
+    // Capture the frame from the webcam.
+    const img = await getImage();
+    // Only Render on alternate frames
+    await predictSegmentation(img);
+    img.dispose();
+    // raw.dispose()
+    frames += 1;
+    // await tf.nextFrame();
 }
 
 async function getImage() {
@@ -168,7 +224,7 @@ async function testOp() {
       const program = squareAndAddKernel(x.shape);
       
       const info = tf.backend().compileAndRun(program, [x]);
-      result = tf.engine().makeTensorFromDataId()
+      result = tf.engine().makeTensorFromDataId(info.dataId, info.shape, info.dtype);
       console.log("===>", result, result);
 }
 
@@ -183,6 +239,53 @@ async function init() {
 }
 
 tf.ready().then(() => init());
+
+function clientWaitAsync(gl, sync, flags, interval_ms) {
+    return new Promise((resolve, reject) => {
+      function test() {
+        const res = gl.clientWaitSync(sync, flags, 0);
+        if (res == gl.WAIT_FAILED) {
+          reject();
+          return;
+        }
+        if (res == gl.TIMEOUT_EXPIRED) {
+          setTimeout(test, interval_ms);
+          return;
+        }
+        resolve();
+      };
+      test();
+    });
+  }
+  
+async function getBufferSubDataAsync(
+      gl, target, buffer, srcByteOffset, dstBuffer,
+      /* optional */ dstOffset, /* optional */ length) {
+    const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+    gl.flush();
+  
+    await clientWaitAsync(gl, sync, 0, 10);
+    gl.deleteSync(sync);
+  
+    gl.bindBuffer(target, buffer);
+    gl.getBufferSubData(target, srcByteOffset, dstBuffer, dstOffset, length);
+    gl.bindBuffer(target, null);
+  
+    return dest;
+  }
+  
+async function readPixelsAsync(gl, x, y, w, h, format, type, dest) {
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buf);
+    gl.bufferData(gl.PIXEL_PACK_BUFFER, dest.byteLength, gl.STREAM_READ);
+    gl.readPixels(x, y, w, h, format, type, 0);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  
+    await getBufferSubDataAsync(gl, gl.PIXEL_PACK_BUFFER, buf, 0, dest);
+  
+    gl.deleteBuffer(buf);
+    return dest;
+  }
 
 function compileShader(gl, shaderType, shaderSource) {
     // Create the shader object
@@ -229,17 +332,17 @@ function createTexture(gl, index = 0) {
     const texture = gl.createTexture();
     // make unit 0 the active texture uint
     // (ie, the unit all other texture commands will affect
-    webglCanvasCtx.activeTexture(webglCanvasCtx.TEXTURE0 + index);
+    gl.activeTexture(gl.TEXTURE0 + index);
 
     // Bind it to texture unit 0' 2D bind point
-    webglCanvasCtx.bindTexture(webglCanvasCtx.TEXTURE_2D, texture);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
 
     // Set the parameters so we don't need mips and so we're not filtering
     // and we don't repeat at the edges
-    webglCanvasCtx.texParameteri(webglCanvasCtx.TEXTURE_2D, webglCanvasCtx.TEXTURE_WRAP_S, webglCanvasCtx.CLAMP_TO_EDGE);
-    webglCanvasCtx.texParameteri(webglCanvasCtx.TEXTURE_2D, webglCanvasCtx.TEXTURE_WRAP_T, webglCanvasCtx.CLAMP_TO_EDGE);
-    webglCanvasCtx.texParameteri(webglCanvasCtx.TEXTURE_2D, webglCanvasCtx.TEXTURE_MIN_FILTER, webglCanvasCtx.LINEAR);
-    webglCanvasCtx.texParameteri(webglCanvasCtx.TEXTURE_2D, webglCanvasCtx.TEXTURE_MAG_FILTER, webglCanvasCtx.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     
     return texture;
 }
@@ -266,36 +369,18 @@ function createPiplelineStageProgram(
     return program;
 }
 
-function webglImage() {
-    if (!webglCanvasCtx) {
-        console.log("No WEBGL supported!");
-        return;
-    }
-    const vertexShaderSource = `#version 300 es
+const vertexShaderSource = `#version 300 es
      
     // an attribute is an input (in) to a vertex shader.
     // It will receive data from a buffer
     in vec2 a_position;
     in vec2 a_texCoord;
 
-    // Used to pass in the resolution of the canvas
-    // uniform vec2 u_resolution;
-
     // Used to pass the texture coordinates to the fragment shader
     out vec2 v_texCoord;
 
     // all shaders have a main function
     void main() {
-
-        // convert the position from pixels to 0.0 to 1.0
-        // vec2 zeroToOne = a_position / u_resolution;
-
-        // // convert from 0->1 to 0->2
-        // vec2 zeroToTwo = zeroToOne * 2.0;
-
-        // // convert from 0->2 to -1->+1 (clipspace)
-        // vec2 clipSpace = zeroToTwo - 1.0;
-
         gl_Position = vec4(a_position * vec2(1, -1), 0, 1);
 
         // pass the texCoord to the fragment shader
@@ -304,7 +389,7 @@ function webglImage() {
     }
     `;
      
-    const fragmentShaderSource = `#version 300 es
+const fragmentShaderSource = `#version 300 es
      
     precision highp float;
     
@@ -383,8 +468,15 @@ function webglImage() {
         vec4 foregroundPixel = texture(u_foreground, uv);
         vec4 backgroundPixel = texture(u_background, uv);
         outColor = foregroundPixel + (backgroundPixel - foregroundPixel) * alpha;
+        // outColor = texture(u_mask, v_texCoord);
     }
-    `;
+`;
+
+function webglImage() {
+    if (!webglCanvasCtx) {
+        console.log("No WEBGL supported!");
+        return;
+    }
 
     const vertexShader = compileShader(webglCanvasCtx, webglCanvasCtx.VERTEX_SHADER, vertexShaderSource);
     const fragmentShader = compileShader(webglCanvasCtx, webglCanvasCtx.FRAGMENT_SHADER, fragmentShaderSource);
@@ -447,6 +539,7 @@ function webglImage() {
 
 function renderWebgl(image) {
     // Bind it to texture unit 0' 2D bind point
+    webglCanvasCtx.activeTexture(webglCanvasCtx.TEXTURE0);
     webglCanvasCtx.bindTexture(webglCanvasCtx.TEXTURE_2D, webglTexture);
 
     // Upload the image into the texture.
@@ -476,6 +569,7 @@ function renderWithBackgroundWebgl(mask, foreground, background) {
     const srcFormat = webglCanvasCtx.RGBA;        // format of data we are supplying
     const srcType = webglCanvasCtx.UNSIGNED_BYTE; // type of data we are supplying
 
+    // webglCanvasCtx.activeTexture(webglCanvasCtx.TEXTURE0);
     webglCanvasCtx.bindTexture(webglCanvasCtx.TEXTURE_2D, webglMaskTexture);
     webglCanvasCtx.texImage2D(webglCanvasCtx.TEXTURE_2D,
                     mipLevel,
@@ -487,6 +581,7 @@ function renderWithBackgroundWebgl(mask, foreground, background) {
                     srcType,
                     mask);
 
+    // webglCanvasCtx.activeTexture(webglCanvasCtx.TEXTURE1);
     webglCanvasCtx.bindTexture(webglCanvasCtx.TEXTURE_2D, webglForegroundTexture);
     webglCanvasCtx.texImage2D(webglCanvasCtx.TEXTURE_2D,
                     mipLevel,
@@ -496,13 +591,14 @@ function renderWithBackgroundWebgl(mask, foreground, background) {
                     foreground);
 
     if (background) {
+        // webglCanvasCtx.activeTexture(webglCanvasCtx.TEXTURE2);
         webglCanvasCtx.bindTexture(webglCanvasCtx.TEXTURE_2D, webglBackgroundTexture);
-        webglCanvasCtx.texImage2D(webglCanvasCtx.TEXTURE_2D,
-                        mipLevel,
-                        internalFormat,
-                        srcFormat,
-                        srcType,
-                        background);
+        // webglCanvasCtx.texImage2D(webglCanvasCtx.TEXTURE_2D,
+        //                 mipLevel,
+        //                 internalFormat,
+        //                 srcFormat,
+        //                 srcType,
+        //                 background);
     }
 
     const primitiveType = webglCanvasCtx.TRIANGLE_STRIP;
@@ -511,3 +607,96 @@ function renderWithBackgroundWebgl(mask, foreground, background) {
 
 webglImage();
   
+
+
+        // const vertexSource = `#version 300 es
+        //     precision highp float;
+        //     in vec3 clipSpacePos;
+        //     in vec2 uv;
+        //     out vec2 resultUV;
+        //     void main() {
+        //     gl_Position = vec4(clipSpacePos, 1);
+        //     resultUV = uv;
+        // }`;
+
+        // const vertexSource = `#version 300 es
+        //     precision highp float;
+        //     in vec2 a_position;
+        //     in vec2 a_texCoord;
+        //     out vec2 resultUV;
+        //     void main() {
+        //     gl_Position = vec4(a_position * vec2(1, -1), 0, 1);
+        //     resultUV = a_texCoord;
+        // }`;
+
+        // const texSource = `#version 300 es
+        //     precision highp float;
+        //     out vec4 outColor;
+        //     void main() {
+        //         //   float x = getXAtOutCoords();
+        //         //   float value = x * x + x;
+        //         //   setOutput(value);
+        //         outColor = vec4(1.0, 0.0, 1.0, 1.0);
+        //     }
+        // `;
+        
+        // const segTex = tf.backend().getTexture(segmentationMask.dataId);
+        // tfCanvasCtx.bindFramebuffer(tfCanvasCtx.FRAMEBUFFER, null);
+
+        // // Tell WebGL how to convert from clip space to pixels
+        // tfCanvasCtx.viewport(0, 0, tfCanvasCtx.canvas.width, tfCanvasCtx.canvas.height);
+        
+        // // Clear the canvas
+        // tfCanvasCtx.clearColor(0, 1, 0, 0);
+        // tfCanvasCtx.clear(tfCanvasCtx.COLOR_BUFFER_BIT);
+
+        // var vao = tfCanvasCtx.createVertexArray();
+        // tfCanvasCtx.bindVertexArray(vao);
+
+        // const positionBuffer = tfCanvasCtx.createBuffer();
+        // tfCanvasCtx.bindBuffer(tfCanvasCtx.ARRAY_BUFFER, positionBuffer);
+        // {
+        //     const positions = [
+        //         -1.0, -1.0,
+        //         1.0, -1.0,
+        //         -1.0, 1.0,
+        //         1.0, 1.0
+        //     ];
+        //     tfCanvasCtx.bufferData(tfCanvasCtx.ARRAY_BUFFER, new Float32Array(positions), tfCanvasCtx.STATIC_DRAW);
+        // }
+
+        // const texCoordBuffer = tfCanvasCtx.createBuffer();
+        // tfCanvasCtx.bindBuffer(tfCanvasCtx.ARRAY_BUFFER, texCoordBuffer);
+        // {
+        //     const positions = [
+        //         0.0, 0.0,
+        //         1.0, 0.0,
+        //         0.0, 1.0,
+        //         1.0, 1.0
+        //     ];
+        //     tfCanvasCtx.bufferData(tfCanvasCtx.ARRAY_BUFFER, new Float32Array(positions), tfCanvasCtx.STATIC_DRAW);
+        // }
+
+        // const vertexShader = compileShader(tfCanvasCtx, tfCanvasCtx.VERTEX_SHADER, vertexSource);
+        // const fragmentShader = compileShader(tfCanvasCtx, tfCanvasCtx.FRAGMENT_SHADER, texSource);
+
+        // const program = createPiplelineStageProgram(tfCanvasCtx, vertexShader, fragmentShader, positionBuffer, texCoordBuffer);
+        // // const program = createProgram(tfCanvasCtx, vertexShader, fragmentShader);
+
+        // tfCanvasCtx.useProgram(program);
+
+        // // const maskLocation = tfCanvasCtx.getUniformLocation(program, "u_mask");
+        // // webglCanvasCtx.uniform1i(maskLocation, 0);
+
+        // // tfCanvasCtx.activeTexture(tfCanvasCtx.TEXTURE15);
+        // // tfCanvasCtx.bindTexture(tfCanvasCtx.TEXTURE_2D, segTex);
+
+        // // tfCanvasCtx.drawElements(tfCanvasCtx.TRIANGLE, 6, tfCanvasCtx.UNSIGNED_SHORT, 0);
+        // tfCanvasCtx.drawArrays(tfCanvasCtx.TRIANGLE_STRIP, 0, 4);
+
+        // predViewCtx.drawImage(video, 0, 0);
+        // // tf.engine.enableScissor();
+        // const gpgpu = tf.backend().gpgpu;
+        // tfCanvasCtx.useProgram(gpgpu.program);
+        // tfCanvasCtx.bindBuffer(tfCanvasCtx.ELEMENT_ARRAY_BUFFER, gpgpu.indexBuffer);
+        // tf.gpgpu_util.bindVertexProgramAttributeStreams(tfCanvasCtx, gpgpu.program, gpgpu.vertexBuffer);

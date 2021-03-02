@@ -87,7 +87,10 @@ async function enableCam(event) {
 		streamShape = [height, width];
         video.addEventListener('loadeddata', predictWebcam);
     });
-    webcam = await tf.data.webcam(video);
+    tf.data.webcam(video).then((obj) => {
+        webcam = obj;
+        setInterval(predictWebcam, 16);
+    });
 }
 
 function timer() {
@@ -164,18 +167,30 @@ async function predictSegmentation(img) {
     }
 }
 
+// async function predictWebcam() {
+//     console.log("Here");
+//     while (true) {
+//         // Capture the frame from the webcam.
+//         const img = await getImage();
+//         // Only Render on alternate frames
+//         await predictSegmentation(img)
+//         img.dispose()
+//         // raw.dispose()
+//         frames += 1;
+//         await tf.nextFrame();
+//     }
+// }
+
+
 async function predictWebcam() {
-    console.log("Here");
-    while (true) {
-        // Capture the frame from the webcam.
-        const img = await getImage();
-        // Only Render on alternate frames
-        await predictSegmentation(img)
-        img.dispose()
-        // raw.dispose()
-        frames += 1;
-        await tf.nextFrame();
-    }
+    // Capture the frame from the webcam.
+    const img = await getImage();
+    // Only Render on alternate frames
+    await predictSegmentation(img);
+    img.dispose();
+    // raw.dispose()
+    frames += 1;
+    // await tf.nextFrame();
 }
 
 /**
