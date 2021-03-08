@@ -135,19 +135,14 @@ async function predictSegmentation(img) {
     const imageData = new ImageData(modelWidth, modelHeight);
     // let imageData;
 
-    tf.tidy(() => {
-        const predictions = model.predict(img).squeeze().softmax().log().add(1).clipByValue(0, 1); // .resizeBilinear(streamShape); // .softmax().log().add(1).clipByValue(0, 1)
-        const [background, person] = predictions.split(2, 2);
-        const segmentationMask = background;
+    const segmentationMask = tf.tidy(() => model.execute(img).squeeze().softmax().split(2, 2)[0].mul(255));
+    
+    const segData = await segmentationMask.data();
+    for (let i = 0; i < modelHeight * modelWidth; i += 1) {
+        imageData.data[i * 4 + 3] = segData[i] * 255;
+    }
 
-        const segData = segmentationMask.dataSync();
-        for (let i = 0; i < modelHeight * modelWidth; i += 1) {
-            imageData.data[i * 4 + 3] = segData[i] * 255;
-        }
-        segmentationMask.dispose();
-        background.dispose();
-        person.dispose();
-    });
+    segmentationMask.dispose();
 
     const imageBitmap = await createImageBitmap(imageData);
     predViewCtx = predView.getContext('2d');
